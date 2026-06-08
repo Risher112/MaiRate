@@ -1,38 +1,35 @@
-(async function() {
-    alert("데이터 수집을 시작합니다. 잠시만 기다려주세요...");
-    let r = [];
-    // 마스터(3), 리마스터(4) 페이지를 순차적으로 불러옵니다.
-    let diffs = [3, 4]; 
-    
-    for (let d of diffs) {
-        try {
-            let res = await fetch(`https://maimaidx.jp/maimai-mobile/record/musicGenre/search/?genre=99&diff=${d}`);
-            let text = await res.text();
-            let doc = new DOMParser().parseFromString(text, 'text/html');
-            let blocks = doc.querySelectorAll('.music_block');
-            
-            blocks.forEach(el => {
-                let t = el.querySelector('.music_title')?.innerText.trim();
-                let a = el.querySelector('.music_achievement_num')?.innerText.match(/[0-9.]+/);
-                if (t && a) {
-                    r.push({
-                        title: t,
-                        achieve: parseFloat(a[0]),
-                        difficulty: d === 3 ? 'Master' : 'Re:Master',
-                        type: el.innerHTML.includes('music_dx') ? 'DX' : 'Standard',
-                        ap: el.innerHTML.includes('ap.png')
-                    });
-                }
-            });
-        } catch (e) {
-            console.error("데이터 수집 중 오류 발생:", e);
-        }
-    }
+javascript:(async function(){
+    let targetDiffs = [3, 4];
+    let allData = [];
+    alert("수집을 시작합니다. 페이지가 자동으로 전환되니 잠시 기다려주세요!");
 
-    if (r.length > 0) {
-        alert(r.length + "곡의 데이터를 찾았습니다! 분석기로 이동합니다.");
-        window.location.href = "https://risher112.github.io/MaiRate/index.html?data=" + encodeURIComponent(JSON.stringify(r));
+    for(let d of targetDiffs) {
+        // 1. 해당 난이도 페이지로 이동
+        window.location.href = "https://maimaidx.jp/maimai-mobile/record/musicGenre/search/?genre=99&diff=" + d;
+        
+        // 2. 페이지 로딩을 기다림 (약 3초)
+        await new Promise(r => setTimeout(r, 3000));
+        
+        // 3. 현재 페이지에서 데이터 추출
+        document.querySelectorAll('.music_block').forEach(el => {
+            let t = el.querySelector('.music_title')?.innerText.trim();
+            let a = el.querySelector('.music_achievement_num')?.innerText.match(/[0-9.]+/);
+            if(t && a) {
+                allData.push({
+                    title: t,
+                    achieve: parseFloat(a[0]),
+                    difficulty: d === 3 ? 'Master' : 'Re:Master',
+                    type: el.innerHTML.includes('music_dx') ? 'DX' : 'Standard',
+                    ap: el.innerHTML.includes('ap.png')
+                });
+            }
+        });
+    }
+    
+    // 4. 수집 완료 후 분석기로 전송
+    if(allData.length > 0) {
+        window.location.href = "https://risher112.github.io/MaiRate/index.html?data=" + encodeURIComponent(JSON.stringify(allData));
     } else {
-        alert("데이터를 찾지 못했습니다. 마이마이넷에 로그인되어 있는지 확인하세요.");
+        alert("데이터를 찾지 못했습니다. 혹시 로그인이 풀렸거나 페이지 로딩이 너무 느린지 확인해주세요.");
     }
 })();
