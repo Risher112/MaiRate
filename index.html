@@ -30,7 +30,7 @@
   
     <h1>마이마이 DX 베스트 50 요약기</h1>
 
-    <div id="loading-text" class="loading">독자 분리형 대용량 보면상수 DB 로드 및 분석 중... 잠시만 기다려주세요.</div>
+    <div id="loading-text" class="loading">유연한 다중 조건 매칭 엔진 가동 중... 잠시만 기다려주세요.</div>
 
     <div id="error-log" class="error-box">
         <h3 style="color:#ff6666; margin-top:0;">⚠️ 시스템 알림</h3>
@@ -52,7 +52,7 @@
 
         <hr style="border: 1px solid #333; margin: 40px 0;">
 
-        <h2>⚠️ 매칭 실패 혹은 데이터베이스 미등록 보면</h2>
+        <h2>⚠️ 매칭 실패 혹은 데이터베이스 미등록 보면 (하단 리스트 확인용)</h2>
         <div id="unregistered-songs-list" class="grid-container"></div>
     </div>
   
@@ -67,8 +67,6 @@ function getRankInfo(achieve) {
     if (achieve >= 94.0000)  return { rank: "AAA", coeff: 16.8 };
     if (achieve >= 90.0000)  return { rank: "AA", coeff: 15.2 };
     if (achieve >= 80.0000)  return { rank: "A", coeff: 13.6 };
-    if (achieve >= 75.0000)  return { rank: "BBB", coeff: 12.0 };
-    if (achieve >= 70.0000)  return { rank: "BB", coeff: 11.2 };
     return { rank: "D", coeff: 0.0 };
 }
   
@@ -80,11 +78,20 @@ function calculateRating(constant, achieve, isAP) {
     return { rating: baseRating, rank: rankInfo.rank };
 }
 
+// 텍스트 매칭율을 극대화하기 위해 공백, 특수문자, 대소문자를 싹 다 날려버리는 정규화 함수
+function normalizeTitle(str) {
+    if (!str) return "";
+    return str.toString()
+              .toLowerCase()
+              .replace(/[\s\t\n\r]/g, "") // 모든 종류의 공백 제거
+              .replace(/[「」『』◆◇◇■□●○★☆,.\-_'"]/g, ""); // 주요 특수기호 제거
+}
+
 async function init() {
     const urlParams = new URLSearchParams(window.location.search);
     const rawData = urlParams.get('data');
     if (!rawData) {
-        showError("북마크릿 데이터가 누락되었습니다.");
+        showError("북마크릿 전적 데이터가 URL 파라미터에 존재하지 않습니다.");
         return;
     }
 
@@ -95,14 +102,13 @@ async function init() {
         userRecords = JSON.parse(decodeURIComponent(rawData.replace(/\+/g, '%20')));
     }
 
-    // [핵심 변경점] 대용량 내장 DB 대신, 같은 폴더에 등록한 music_data.json을 비동기로 안전하게 호출합니다.
     let localMultiMusicDB = [];
     try {
         const response = await fetch('./music_data.json');
-        if (!response.ok) throw new Error("파일 로드 실패");
+        if (!response.ok) throw new Error();
         localMultiMusicDB = await response.json();
     } catch (e) {
-        showError("music_data.json 파일을 불러오지 못했습니다. 깃허브에 파일이 정상적으로 추가되었는지 확인해주세요.");
+        showError("music_data.json을 로드하지 못했습니다. 파일명 소문자 여부와 문법 오류를 체크해주세요.");
         return;
     }
 
@@ -112,11 +118,17 @@ async function init() {
     userRecords.forEach(record => {
         const isAP = record.ap || false;
         
-        // 3조건(곡명, 보면타입, 난이도) 매칭 검증
+        // 정밀 유연 매칭 가동
         const songData = localMultiMusicDB.find(m => {
-            const cleanTarget = record.title.trim().toLowerCase().replace(/\s+/g, '');
-            const cleanDB = m.title.trim().toLowerCase().replace(/\s+/g, '');
-            return cleanTarget === cleanDB && m.type === record.type && m.difficulty === record.difficulty;
+            const cleanTarget = normalizeTitle(record.title);
+            const cleanDB = normalizeTitle(m.title);
+            
+            // 난이도 명칭 대소문자 무시 비교 (Master === master 등)
+            const matchDiff = (m.difficulty || "").trim().toLowerCase() === (record.difficulty || "").trim().toLowerCase();
+            // 보면 종류 비교 (Standard, DX)
+            const matchType = (m.type || "").trim().toUpperCase() === (record.type || "").trim().toUpperCase();
+
+            return cleanTarget === cleanDB && matchDiff && matchType;
         });
 
         if (songData) {
@@ -130,13 +142,14 @@ async function init() {
                     achieve: record.achieve,
                     rating: calc.rating,
                     rank: calc.rank,
-                    isNew: songData.is_new,
+                    isNew: songData.is_new === true || songData.is_new === "true",
                     ap: isAP
                 });
                 return;
             }
         }
         
+        // 매칭이 전혀 안 될 경우 일단 상수 14.0 임시 대입 후 하단 실패 리스트로 이동
         const calcFallback = calculateRating(14.0, record.achieve, isAP);
         unregisteredSongs.push({
             title: record.title,
@@ -174,6 +187,12 @@ function showError(msg) {
 function renderSongs(songs, targetId) {
     const container = document.getElementById(targetId);
     if (!container) return;
+    container.innerHTML = ""; // 초기화
+    
+    if (songs.length === 0) {
+        container.innerHTML = "<p style='color:#666; padding:10px;'>해당하는 보면 카드가 없습니다.</p>";
+        return;
+    }
     
     songs.forEach(song => {
         const card = document.createElement('div');
