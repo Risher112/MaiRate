@@ -10,10 +10,10 @@
         .grid-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 15px; margin-bottom: 40px; }
         .song-card { background-color: #1e1e1e; border: 2px solid #333; border-radius: 10px; padding: 10px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
         .song-card img { width: 100%; max-width: 120px; border-radius: 5px; margin-bottom: 8px; }
-        .title { font-size: 14px; font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 5px; }
+        .title { font-size: 14px; font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 5px; color: #fff; }
         .achieve { color: #ffcc00; font-weight: bold; font-size: 16px; }
         .rating { color: #00ffcc; font-size: 13px; margin-top: 5px; }
-        .warning-text { text-align: center; color: #aaaaaa; font-style: italic; }
+        .warning-text { text-align: center; color: #ff9900; font-weight: bold; margin-bottom: 20px; }
     </style>
 </head>
 <body>
@@ -26,13 +26,14 @@
     <h2>구곡 상위 35곡 (Old Songs Best 35)</h2>
     <div id="old-songs-list" class="grid-container"></div>
 
-    <!-- DB에 없어서 분류되지 못한 곡들을 강제로 보여주는 예외 섹션 -->
-    <h2>⚠️ DB 미등록 곡 목록 (분석 보류군)</h2>
-    <p class="warning-text">아래에 곡이 뜬다면 musicConstantDB의 곡 제목(일본어/오타)이 마이마이넷과 일치하지 않는 상태입니다.</p>
+    <hr style="border: 1px solid #333; margin: 40px 0;">
+
+    <h2>⚠️ [검증용] 마이마이넷에서 추출된 전체 곡 목록 (총 <span id="debug-count">0</span>개)</h2>
+    <p class="warning-text">아래에 뜨는 곡 제목들을 복사해서 musicConstantDB에 등록하시면 위쪽 상위 곡 칸으로 올라갑니다!</p>
     <div id="unregistered-songs-list" class="grid-container"></div>
   
 <script>
-// 1. 보면 상수 데이터베이스
+// 1. 보면 상수 데이터베이스 (테스트용)
 const musicConstantDB = {
     "超ナイト・オブ・ナイツ": { level: 11.0, isNew: true, image: "https://maimai.sega.jp/storage/jacket/010101.png" },
     "Arrow": { level: 12.0, isNew: true, image: "https://maimai.sega.jp/storage/jacket/020202.png" }
@@ -56,7 +57,7 @@ function calculateSingleRating(constant, achieve) {
     return Math.floor(constant * coeff * (targetAchieve / 100));
 }
   
-// 4. 데이터 처리 데이터 메인 로직
+// 4. 메인 로직
 function init() {
     const urlParams = new URLSearchParams(window.location.search);
     const rawData = urlParams.get('data');
@@ -68,15 +69,16 @@ function init() {
   
     const userRecords = JSON.parse(decodeURIComponent(rawData));
     
+    // 가져온 데이터 개수 표시
+    document.getElementById('debug-count').innerText = userRecords.length;
+    
     let processedSongs = [];
-    let unregisteredSongs = []; // DB에 없는 곡들을 모을 배열
+    let unregisteredSongs = []; 
   
     userRecords.forEach(record => {
-        // 대소문자나 공백 오류 방지를 위해 유연하게 매칭 시도
         const songInfo = musicConstantDB[record.title];
         
         if (songInfo) {
-            // 대소문자 에러 방지를 위해 속성을 안전하게 가져옴 (isNew 혹은 isnew 모두 대응)
             const isSongNew = songInfo.isNew || songInfo.isnew || false;
             const rating = calculateSingleRating(songInfo.level, record.achieve);
             
@@ -88,12 +90,12 @@ function init() {
                 image: songInfo.image
             });
         } else {
-            // DB에 없는 곡은 임시 레이팅(0점) 처리하여 따로 보관
+            // DB에 없는 곡은 0점 처리하되, 이름과 달성률을 유지해서 보관
             unregisteredSongs.push({
                 title: record.title,
                 achieve: record.achieve,
                 rating: 0,
-                image: 'https://via.placeholder.com/120?text=No+DB'
+                image: 'https://via.placeholder.com/120/222222/ffffff?text=No+Image'
             });
         }
     });
@@ -111,18 +113,21 @@ function init() {
   
 function renderSongs(songs, targetId) {
     const container = document.getElementById(targetId);
+    if (!container) return;
+    
     if (songs.length === 0) {
         container.innerHTML = "<p style='color:#666; width:100%; text-align:center;'>표시할 곡이 없습니다.</p>";
         return;
     }
+    
     songs.forEach(song => {
         const card = document.createElement('div');
         card.className = 'song-card';
         card.innerHTML = `
-            <img src="${song.image}" alt="${song.title}" onerror="this.src='https://via.placeholder.com/120?text=No+Image'">
-            <div class="title" title="${song.title}">${song.title}</div>
+            <img src="${song.image}" alt="${song.title}">
+            <div class="title" style="font-size:12px; font-weight:bold; color:#00ffcc; margin-bottom:5px;">${song.title}</div>
             <div class="achieve">${song.achieve.toFixed(4)}%</div>
-            <div class="rating">Rating: <strong>${song.rating > 0 ? song.rating : '계산불가'}</strong></div>
+            <div class="rating">Rating: <strong>${song.rating > 0 ? song.rating : 'DB미등록'}</strong></div>
         `;
         container.appendChild(card);
     });
