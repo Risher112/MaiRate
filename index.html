@@ -16,37 +16,43 @@
         .achieve { color: #ffcc00; font-weight: bold; font-size: 16px; margin: 5px 0; }
         .rating { color: #00ffcc; font-size: 14px; }
         .rank-badge { display: inline-block; padding: 2px 6px; font-size: 11px; font-weight: bold; border-radius: 3px; background-color: #333; margin-top: 3px; }
+        .loading { text-align: center; font-size: 18px; color: #00ffcc; margin: 5px 0; }
+        .error-box { background-color: #441111; border: 1px solid #ff4444; padding: 15px; border-radius: 5px; margin-bottom: 20px; display: none; }
     </style>
 </head>
 <body>
   
     <h1>마이마이 DX 베스트 50 요약기</h1>
 
-    <div class="summary-box">
-        <h3 style="margin:0; color:#aaa;">베스트 50 총합 레이팅</h3>
-        <p style="font-size: 32px; font-weight: bold; color: #00ffcc; margin: 10px 0;" id="total-rating">0</p>
-        <p style="margin:0; font-size:12px; color:#888;">(신곡 상위 15곡 + 구곡 상위 35곡 합산)</p>
+    <div id="loading-text" class="loading">데이터베이스 및 전적 로딩 중... 잠시만 기다려주세요.</div>
+
+    <div id="error-log" class="error-box">
+        <h3 style="color:#ff6666; margin-top:0;">⚠️ 시스템 알림</h3>
+        <p id="error-message" style="font-family:monospace; color:#eee;"></p>
     </div>
-    
-    <h2>신곡 상위 15곡 (New Songs Best 15)</h2>
-    <div id="new-songs-list" class="grid-container"></div>
-  
-    <h2>구곡 상위 35곡 (Old Songs Best 35)</h2>
-    <div id="old-songs-list" class="grid-container"></div>
 
-    <hr style="border: 1px solid #333; margin: 40px 0;">
+    <!-- 총합 레이팅 표시판 -->
+    <div id="main-content" style="display:none;">
+        <div class="summary-box">
+            <h3 style="margin:0; color:#aaa;">베스트 50 총합 레이팅</h3>
+            <p style="font-size: 32px; font-weight: bold; color: #00ffcc; margin: 10px 0;" id="total-rating">0</p>
+            <p style="margin:0; font-size:12px; color:#888;">(신곡 상위 15곡 + 구곡 상위 35곡 합산)</p>
+        </div>
+        
+        <h2>신곡 상위 15곡 (New Songs Best 15)</h2>
+        <div id="new-songs-list" class="grid-container"></div>
+      
+        <h2>구곡 상위 35곡 (Old Songs Best 35)</h2>
+        <div id="old-songs-list" class="grid-container"></div>
 
-    <h2>⚠️ DB 미등록 곡 목록 (보면 상수 입력 필요)</h2>
-    <div id="unregistered-songs-list" class="grid-container"></div>
+        <hr style="border: 1px solid #333; margin: 40px 0;">
+
+        <h2>⚠️ 데이터베이스 미등록 혹은 매칭 실패 곡</h2>
+        <div id="unregistered-songs-list" class="grid-container"></div>
+    </div>
   
 <script>
-// 1. 보면 상수 데이터베이스 (여기에 곡들의 실제 상수를 계속 추가하셔야 정확해집니다)
-const musicConstantDB = {
-    "超ナイト・オブ・ナイツ": { level: 11.0, isNew: true },
-    "Arrow": { level: 12.0, isNew: true }
-};
-
-// 2. 요청해주신 달성률 기준 세부 랭크 계수 산출 규칙
+// 제공해주신 랭크별 상세 계수 세분화 규칙
 function getRankInfo(achieve) {
     if (achieve >= 100.5000) return { rank: "SSS+", coeff: 22.4 };
     if (achieve >= 100.0000) return { rank: "SSS", coeff: 21.6 };
@@ -68,90 +74,114 @@ function getRankInfo(achieve) {
     return { rank: "D", coeff: 0.0 };
 }
   
-// 3. 레이팅 최종 계산 공식 구현
-// 공식: [보면정수(난이도) × 달성률(최대 100.5%) × 랭크별 계수] (소수점 버림) + (AP인 경우 +1)
+// 레이팅 최종 계산 공식 구현 (소수점 버림 규칙 및 AP 보너스 반영)
 function calculateRating(constant, achieve, isAP) {
     const rankInfo = getRankInfo(achieve);
-    const targetAchieve = Math.min(achieve, 100.5); // 100.5% 제한 규칙 적용
+    const targetAchieve = Math.min(achieve, 100.5); 
     
-    // 기본 레이팅 계산 및 소수점 이하 버림 (Math.floor)
     let baseRating = Math.floor(constant * (targetAchieve / 100) * rankInfo.coeff);
-    
-    // 올 퍼펙트(AP) 보너스 +1점 처리
     if (isAP) {
         baseRating += 1;
     }
     return { rating: baseRating, rank: rankInfo.rank };
 }
-  
-// 4. 메인 처리기
-function init() {
+
+async function init() {
     const urlParams = new URLSearchParams(window.location.search);
     const rawData = urlParams.get('data');
   
-    if (!rawData) return;
-  
+    if (!rawData) {
+        document.getElementById('loading-text').style.display = 'none';
+        document.getElementById('error-log').style.display = 'block';
+        document.getElementById('error-message').innerText = "북마크릿 데이터가 전송되지 않았습니다. 마이마이넷 전적실에서 북마크를 다시 실행해 주세요.";
+        return;
+    }
+
     let userRecords = [];
     try {
         userRecords = JSON.parse(decodeURIComponent(rawData));
     } catch (e) {
-        // 복구 처리 구문
         userRecords = JSON.parse(decodeURIComponent(rawData.replace(/\+/g, '%20')));
     }
-    
-    let processedSongs = [];
-    let unregisteredSongs = []; 
-  
-    userRecords.forEach(record => {
-        const songInfo = musicConstantDB[record.title];
-        const isAP = record.ap || false;
-        
-        if (songInfo) {
-            const calc = calculateRating(songInfo.level, record.achieve, isAP);
-            processedSongs.push({
-                title: record.title,
-                achieve: record.achieve,
-                rating: calc.rating,
-                rank: calc.rank,
-                isNew: songInfo.isNew || false,
-                ap: isAP
-            });
-        } else {
-            const calcFallback = calculateRating(14.0, record.achieve, isAP); // DB 없을 때 가상 14.0 대입
+
+    try {
+        // sgimera 오픈소스 분석기의 실제 마이마이 DX 전체 보면상수 json 데이터를 원격으로 연동합니다.
+        const response = await fetch('https://raw.githubusercontent.com/sgimera/mai_RatingAnalyzer/master/music_data.json');
+        if (!response.ok) throw new Error("보면상수 DB 원격 다운로드 실패");
+        const musicDB = await response.json();
+
+        let processedSongs = [];
+        let unregisteredSongs = []; 
+
+        userRecords.forEach(record => {
+            const isAP = record.ap || false;
+            // 오픈소스 DB에서 유저가 플레이한 곡명과 완벽히 매치되는 보면 데이터 탐색
+            const songData = musicDB.find(m => m.title === record.title || m.title_en === record.title);
+
+            if (songData) {
+                // 해당 곡의 레벨/상수(inner_level) 가져오기
+                const levelConstant = parseFloat(songData.inner_level || songData.lev);
+                // 신곡 유무 판정 (데이터 필드 구조에 맞춤)
+                const isNewSong = songData.is_new === true || songData.version === "CiRCLE+"; 
+
+                if (!isNaN(levelConstant)) {
+                    const calc = calculateRating(levelConstant, record.achieve, isAP);
+                    processedSongs.push({
+                        title: record.title,
+                        achieve: record.achieve,
+                        rating: calc.rating,
+                        rank: calc.rank,
+                        isNew: isNewSong,
+                        ap: isAP
+                    });
+                    return;
+                }
+            }
+            
+            // DB 매칭 실패 시 임시 노출용 처리
+            const calcFallback = calculateRating(14.0, record.achieve, isAP);
             unregisteredSongs.push({
                 title: record.title,
                 achieve: record.achieve,
                 rank: calcFallback.rank,
                 ap: isAP
             });
-        }
-    });
-  
-    // 레이팅 높은 순서로 정렬
-    processedSongs.sort((a, b) => b.rating - a.rating);
-    
-    // 신곡 상위 15곡 / 구곡 상위 35곡 분할 수집
-    const newSongs = processedSongs.filter(s => s.isNew).slice(0, 15);
-    const oldSongs = processedSongs.filter(s => !s.isNew).slice(0, 35);
-  
-    // 베스트 50 총합 레이팅 스코어 계산
-    let finalSum = 0;
-    newSongs.forEach(s => finalSum += s.rating);
-    oldSongs.forEach(s => finalSum += s.rating);
-    document.getElementById('total-rating').innerText = finalSum;
-  
-    // 각 리스트 화면에 출력
-    renderSongs(newSongs, 'new-songs-list');
-    renderSongs(oldSongs, 'old-songs-list');
-    renderSongs(unregisteredSongs, 'unregistered-songs-list');
+        });
+
+        // 레이팅 역순 정렬
+        processedSongs.sort((a, b) => b.rating - a.rating);
+        
+        // 규칙대로 신곡 베스트 15, 구곡 베스트 35 분할 필터링
+        const newSongs = processedSongs.filter(s => s.isNew).slice(0, 15);
+        const oldSongs = processedSongs.filter(s => !s.isNew).slice(0, 35);
+
+        // 총점 합산
+        let finalSum = 0;
+        newSongs.forEach(s => finalSum += s.rating);
+        oldSongs.forEach(s => finalSum += s.rating);
+        
+        // UI 반영
+        document.getElementById('loading-text').style.display = 'none';
+        document.getElementById('main-content').style.display = 'block';
+        document.getElementById('total-rating').innerText = finalSum;
+
+        renderSongs(newSongs, 'new-songs-list');
+        renderSongs(oldSongs, 'old-songs-list');
+        renderSongs(unregisteredSongs, 'unregistered-songs-list');
+
+    } catch (err) {
+        document.getElementById('loading-text').style.display = 'none';
+        document.getElementById('error-log').style.display = 'block';
+        document.getElementById('error-message').innerText = "오픈소스 DB 연동 중 오류 발생: " + err.message;
+    }
 }
-  
+
 function renderSongs(songs, targetId) {
     const container = document.getElementById(targetId);
     if (!container) return;
     
     if (songs.length === 0) {
-        container.innerHTML = "<p style='color:#666; width:100%; text-align:center;'>표시할 곡이 없습니다.</p>";
+        container.innerHTML = "<p style='color:#666; width:100%; text-align:center;'>조건에 맞는 곡이 없습니다.</p>";
         return;
     }
     
@@ -160,11 +190,11 @@ function renderSongs(songs, targetId) {
         card.className = `song-card ${song.ap ? 'ap-border' : ''}`;
         
         let apBadge = song.ap ? `<div class="ap-badge">ALL PERFECT</div>` : '';
-        let ratingDisplay = song.rating !== undefined ? `Rating: <strong>${song.rating}</strong>` : 'DB 입력 대기중';
+        let ratingDisplay = song.rating !== undefined ? `Rating: <strong>${song.rating}</strong>` : 'DB 매칭 안됨';
         
         card.innerHTML = `
             ${apBadge}
-            <div class="title">${song.title}</div>
+            <div class="title" title="${song.title}">${song.title}</div>
             <div class="achieve">${song.achieve.toFixed(4)}%</div>
             <div class="rating">${ratingDisplay}</div>
             <div class="rank-badge">${song.rank}</div>
@@ -172,7 +202,7 @@ function renderSongs(songs, targetId) {
         container.appendChild(card);
     });
 }
-  
+
 window.onload = init;
 </script>
 </body>
