@@ -7,22 +7,25 @@
     <style>
         body { background-color: #121212; color: #ffffff; font-family: 'Arial', sans-serif; padding: 20px; }
         h1, h2 { text-align: center; color: #00ffcc; }
-        .grid-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 15px; margin-bottom: 40px; }
-        .song-card { background-color: #1e1e1e; border: 2px solid #333; border-radius: 10px; padding: 10px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
-        .title { font-size: 12px; font-weight: bold; color: #00ffcc; margin-bottom: 5px; }
-        .achieve { color: #ffcc00; font-weight: bold; font-size: 16px; }
-        .rating { color: #aaaaaa; font-size: 13px; margin-top: 5px; }
-        .error-box { background-color: #441111; border: 1px solid #ff4444; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
+        .summary-box { background-color: #1e1e1e; border: 2px solid #00ffcc; border-radius: 10px; padding: 15px; max-width: 500px; margin: 0 auto 30px auto; text-align: center; }
+        .grid-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px; margin-bottom: 40px; }
+        .song-card { background-color: #1e1e1e; border: 2px solid #333; border-radius: 10px; padding: 12px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.3); position: relative; }
+        .song-card.ap-border { border-color: #ffcc00; box-shadow: 0 0 10px #ffcc00; }
+        .ap-badge { position: absolute; top: 5px; right: 5px; background-color: #ffcc00; color: #000; font-size: 10px; font-weight: bold; padding: 2px 5px; border-radius: 3px; }
+        .title { font-size: 13px; font-weight: bold; color: #fff; margin-bottom: 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .achieve { color: #ffcc00; font-weight: bold; font-size: 16px; margin: 5px 0; }
+        .rating { color: #00ffcc; font-size: 14px; }
+        .rank-badge { display: inline-block; padding: 2px 6px; font-size: 11px; font-weight: bold; border-radius: 3px; background-color: #333; margin-top: 3px; }
     </style>
 </head>
 <body>
   
     <h1>마이마이 DX 베스트 50 요약기</h1>
 
-    <!-- 에러가 나면 눈으로 볼 수 있게 만든 디버깅 박스 -->
-    <div id="error-log" class="error-box" style="display:none;">
-        <h3 style="color:#ff6666; margin-top:0;">⚠️ 시스템 내부 로그 (디버깅용)</h3>
-        <p id="error-message" style="font-family:monospace; color:#eee;"></p>
+    <div class="summary-box">
+        <h3 style="margin:0; color:#aaa;">베스트 50 총합 레이팅</h3>
+        <p style="font-size: 32px; font-weight: bold; color: #00ffcc; margin: 10px 0;" id="total-rating">0</p>
+        <p style="margin:0; font-size:12px; color:#888;">(신곡 상위 15곡 + 구곡 상위 35곡 합산)</p>
     </div>
     
     <h2>신곡 상위 15곡 (New Songs Best 15)</h2>
@@ -33,83 +36,114 @@
 
     <hr style="border: 1px solid #333; margin: 40px 0;">
 
-    <h2>⚠️ [검증용] 추출된 전체 곡 목록 (총 <span id="debug-count">0</span>개)</h2>
+    <h2>⚠️ DB 미등록 곡 목록 (보면 상수 입력 필요)</h2>
     <div id="unregistered-songs-list" class="grid-container"></div>
   
 <script>
+// 1. 보면 상수 데이터베이스 (여기에 곡들의 실제 상수를 계속 추가하셔야 정확해집니다)
 const musicConstantDB = {
-    "超ナイト・オブ・ナイツ": { level: 11.0, isNew: true, image: "" },
-    "Arrow": { level: 12.0, isNew: true, image: "" }
+    "超ナイト・オブ・ナイツ": { level: 11.0, isNew: true },
+    "Arrow": { level: 12.0, isNew: true }
 };
 
-function showError(msg) {
-    document.getElementById('error-log').style.display = 'block';
-    document.getElementById('error-message').innerHTML += msg + "<br>";
+// 2. 요청해주신 달성률 기준 세부 랭크 계수 산출 규칙
+function getRankInfo(achieve) {
+    if (achieve >= 100.5000) return { rank: "SSS+", coeff: 22.4 };
+    if (achieve >= 100.0000) return { rank: "SSS", coeff: 21.6 };
+    if (achieve >= 99.5000)  return { rank: "SS+", coeff: 21.1 };
+    if (achieve >= 99.0000)  return { rank: "SS", coeff: 20.8 };
+    if (achieve >= 98.0000)  return { rank: "S+", coeff: 20.3 };
+    if (achieve >= 97.0000)  return { rank: "S", coeff: 20.0 };
+    if (achieve >= 94.0000)  return { rank: "AAA", coeff: 16.8 };
+    if (achieve >= 90.0000)  return { rank: "AA", coeff: 15.2 };
+    if (achieve >= 80.0000)  return { rank: "A", coeff: 13.6 };
+    if (achieve >= 75.0000)  return { rank: "BBB", coeff: 12.0 };
+    if (achieve >= 70.0000)  return { rank: "BB", coeff: 11.2 };
+    if (achieve >= 60.0000)  return { rank: "B", coeff: 9.6 };
+    if (achieve >= 50.0000)  return { rank: "C", coeff: 8.0 };
+    if (achieve >= 40.0000)  return { rank: "D", coeff: 6.4 };
+    if (achieve >= 30.0000)  return { rank: "D", coeff: 4.8 };
+    if (achieve >= 20.0000)  return { rank: "D", coeff: 3.2 };
+    if (achieve >= 10.0000)  return { rank: "D", coeff: 1.6 };
+    return { rank: "D", coeff: 0.0 };
 }
-
-function init() {
-    try {
-        const urlParams = new URLSearchParams(window.location.search);
-        let rawData = urlParams.get('data');
-      
-        if (!rawData) {
-            showError("주소창에서 'data' 파라미터를 읽지 못했습니다. 북마크릿 주소 연동을 확인해 주세요.");
-            return;
-        }
-
-        let userRecords = [];
-        try {
-            // URL 디코딩 후 JSON 파싱 시도
-            userRecords = JSON.parse(decodeURIComponent(rawData));
-        } catch (jsonErr) {
-            showError("1차 데이터 파싱 에러 발생. 깨진 문자열 복구를 시도합니다: " + jsonErr.message);
-            
-            // 특수문자 깨짐 강제 구제 로직
-            try {
-                let fixedData = decodeURIComponent(rawData.replace(/\+/g, '%20'));
-                userRecords = JSON.parse(fixedData);
-                showError("💡 데이터 복구에 성공했습니다! 정상적으로 곡을 불러옵니다.");
-            } catch (retryErr) {
-                showError("❌ 치명적인 데이터 깨짐 에러. 파싱 불가: " + retryErr.message);
-                showError("현재 전달된 데이터 원문 맛보기: " + rawData.substring(0, 100));
-                return;
-            }
-        }
-        
-        document.getElementById('debug-count').innerText = userRecords.length;
-        
-        let processedSongs = [];
-        let unregisteredSongs = []; 
-      
-        userRecords.forEach(record => {
-            if (!record || !record.title) return;
-            
-            const songInfo = musicConstantDB[record.title];
-            if (songInfo) {
-                processedSongs.push({
-                    title: record.title,
-                    achieve: record.achieve,
-                    rating: Math.floor(songInfo.level * 22.4 * (Math.min(record.achieve, 100.5) / 100)),
-                    isNew: songInfo.isNew || false
-                });
-            } else {
-                unregisteredSongs.push({
-                    title: record.title,
-                    achieve: record.achieve,
-                    rating: 0
-                });
-            }
-        });
-      
-        processedSongs.sort((a, b) => b.rating - a.rating);
-        
-        renderSongs(processedSongs.filter(s => s.isNew).slice(0, 15), 'new-songs-list');
-        renderSongs(processedSongs.filter(s => !s.isNew).slice(0, 35), 'old-songs-list');
-        renderSongs(unregisteredSongs, 'unregistered-songs-list');
-
-    } catch (globalErr) {
-        showError("전체 시스템 에러 치명상: " + globalErr.message);
+  
+// 3. 레이팅 최종 계산 공식 구현
+// 공식: [보면정수(난이도) × 달성률(최대 100.5%) × 랭크별 계수] (소수점 버림) + (AP인 경우 +1)
+function calculateRating(constant, achieve, isAP) {
+    const rankInfo = getRankInfo(achieve);
+    const targetAchieve = Math.min(achieve, 100.5); // 100.5% 제한 규칙 적용
+    
+    // 기본 레이팅 계산 및 소수점 이하 버림 (Math.floor)
+    let baseRating = Math.floor(constant * (targetAchieve / 100) * rankInfo.coeff);
+    
+    // 올 퍼펙트(AP) 보너스 +1점 처리
+    if (isAP) {
+        baseRating += 1;
     }
+    return { rating: baseRating, rank: rankInfo.rank };
+}
+  
+// 4. 메인 처리기
+function init() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const rawData = urlParams.get('data');
+  
+    if (!rawData) return;
+  
+    let userRecords = [];
+    try {
+        userRecords = JSON.parse(decodeURIComponent(rawData));
+    } catch (e) {
+        // 복구 처리 구문
+        userRecords = JSON.parse(decodeURIComponent(rawData.replace(/\+/g, '%20')));
+    }
+    
+    let processedSongs = [];
+    let unregisteredSongs = []; 
+  
+    userRecords.forEach(record => {
+        const songInfo = musicConstantDB[record.title];
+        const isAP = record.ap || false;
+        
+        if (songInfo) {
+            const calc = calculateRating(songInfo.level, record.achieve, isAP);
+            processedSongs.push({
+                title: record.title,
+                achieve: record.achieve,
+                rating: calc.rating,
+                rank: calc.rank,
+                isNew: songInfo.isNew || false,
+                ap: isAP
+            });
+        } else {
+            const calcFallback = calculateRating(14.0, record.achieve, isAP); // DB 없을 때 가상 14.0 대입
+            unregisteredSongs.push({
+                title: record.title,
+                achieve: record.achieve,
+                rank: calcFallback.rank,
+                ap: isAP
+            });
+        }
+    });
+  
+    // 레이팅 높은 순서로 정렬
+    processedSongs.sort((a, b) => b.rating - a.rating);
+    
+    // 신곡 상위 15곡 / 구곡 상위 35곡 분할 수집
+    const newSongs = processedSongs.filter(s => s.isNew).slice(0, 15);
+    const oldSongs = processedSongs.filter(s => !s.isNew).slice(0, 35);
+  
+    // 베스트 50 총합 레이팅 스코어 계산
+    let finalSum = 0;
+    newSongs.forEach(s => finalSum += s.rating);
+    oldSongs.forEach(s => finalSum += s.rating);
+    document.getElementById('total-rating').innerText = finalSum;
+  
+    // 각 리스트 화면에 출력
+    renderSongs(newSongs, 'new-songs-list');
+    renderSongs(oldSongs, 'old-songs-list');
+    renderSongs(unregisteredSongs, 'unregistered-songs-list');
 }
   
 function renderSongs(songs, targetId) {
@@ -123,11 +157,17 @@ function renderSongs(songs, targetId) {
     
     songs.forEach(song => {
         const card = document.createElement('div');
-        card.className = 'song-card';
+        card.className = `song-card ${song.ap ? 'ap-border' : ''}`;
+        
+        let apBadge = song.ap ? `<div class="ap-badge">ALL PERFECT</div>` : '';
+        let ratingDisplay = song.rating !== undefined ? `Rating: <strong>${song.rating}</strong>` : 'DB 입력 대기중';
+        
         card.innerHTML = `
+            ${apBadge}
             <div class="title">${song.title}</div>
             <div class="achieve">${song.achieve.toFixed(4)}%</div>
-            <div class="rating">Rating: <strong>${song.rating > 0 ? song.rating : 'DB미등록'}</strong></div>
+            <div class="rating">${ratingDisplay}</div>
+            <div class="rank-badge">${song.rank}</div>
         `;
         container.appendChild(card);
     });
