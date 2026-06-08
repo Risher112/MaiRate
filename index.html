@@ -9,16 +9,21 @@
         h1, h2 { text-align: center; color: #00ffcc; }
         .grid-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 15px; margin-bottom: 40px; }
         .song-card { background-color: #1e1e1e; border: 2px solid #333; border-radius: 10px; padding: 10px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
-        .song-card img { width: 100%; max-width: 120px; border-radius: 5px; margin-bottom: 8px; }
-        .title { font-size: 14px; font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 5px; color: #fff; }
+        .title { font-size: 12px; font-weight: bold; color: #00ffcc; margin-bottom: 5px; }
         .achieve { color: #ffcc00; font-weight: bold; font-size: 16px; }
-        .rating { color: #00ffcc; font-size: 13px; margin-top: 5px; }
-        .warning-text { text-align: center; color: #ff9900; font-weight: bold; margin-bottom: 20px; }
+        .rating { color: #aaaaaa; font-size: 13px; margin-top: 5px; }
+        .error-box { background-color: #441111; border: 1px solid #ff4444; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
     </style>
 </head>
 <body>
   
     <h1>마이마이 DX 베스트 50 요약기</h1>
+
+    <!-- 에러가 나면 눈으로 볼 수 있게 만든 디버깅 박스 -->
+    <div id="error-log" class="error-box" style="display:none;">
+        <h3 style="color:#ff6666; margin-top:0;">⚠️ 시스템 내부 로그 (디버깅용)</h3>
+        <p id="error-message" style="font-family:monospace; color:#eee;"></p>
+    </div>
     
     <h2>신곡 상위 15곡 (New Songs Best 15)</h2>
     <div id="new-songs-list" class="grid-container"></div>
@@ -28,87 +33,83 @@
 
     <hr style="border: 1px solid #333; margin: 40px 0;">
 
-    <h2>⚠️ [검증용] 마이마이넷에서 추출된 전체 곡 목록 (총 <span id="debug-count">0</span>개)</h2>
-    <p class="warning-text">아래에 뜨는 곡 제목들을 복사해서 musicConstantDB에 등록하시면 위쪽 상위 곡 칸으로 올라갑니다!</p>
+    <h2>⚠️ [검증용] 추출된 전체 곡 목록 (총 <span id="debug-count">0</span>개)</h2>
     <div id="unregistered-songs-list" class="grid-container"></div>
   
 <script>
-// 1. 보면 상수 데이터베이스 (테스트용)
 const musicConstantDB = {
-    "超ナイト・オブ・ナイツ": { level: 11.0, isNew: true, image: "https://maimai.sega.jp/storage/jacket/010101.png" },
-    "Arrow": { level: 12.0, isNew: true, image: "https://maimai.sega.jp/storage/jacket/020202.png" }
+    "超ナイト・オブ・ナイツ": { level: 11.0, isNew: true, image: "" },
+    "Arrow": { level: 12.0, isNew: true, image: "" }
 };
 
-// 2. 판정계수 계산
-function getRatingCoefficient(achieve) {
-    if (achieve >= 100.5000) return 22.4;
-    if (achieve >= 100.0000) return 21.6;
-    if (achieve >= 99.5000)  return 21.1;
-    if (achieve >= 99.0000)  return 20.8;
-    if (achieve >= 98.0000)  return 20.3;
-    if (achieve >= 97.0000)  return 20.0;
-    return 16.8;
+function showError(msg) {
+    document.getElementById('error-log').style.display = 'block';
+    document.getElementById('error-message').innerHTML += msg + "<br>";
 }
-  
-// 3. 레이팅 계산
-function calculateSingleRating(constant, achieve) {
-    const coeff = getRatingCoefficient(achieve);
-    const targetAchieve = Math.min(achieve, 100.5);
-    return Math.floor(constant * coeff * (targetAchieve / 100));
-}
-  
-// 4. 메인 로직
+
 function init() {
-    const urlParams = new URLSearchParams(window.location.search);
-    const rawData = urlParams.get('data');
-  
-    if (!rawData) {
-        document.body.innerHTML += "<p style='text-align:center; color:#ff4444;'>북마크릿을 통해 데이터를 전송받지 못했습니다.</p>";
-        return;
-    }
-  
-    const userRecords = JSON.parse(decodeURIComponent(rawData));
-    
-    // 가져온 데이터 개수 표시
-    document.getElementById('debug-count').innerText = userRecords.length;
-    
-    let processedSongs = [];
-    let unregisteredSongs = []; 
-  
-    userRecords.forEach(record => {
-        const songInfo = musicConstantDB[record.title];
-        
-        if (songInfo) {
-            const isSongNew = songInfo.isNew || songInfo.isnew || false;
-            const rating = calculateSingleRating(songInfo.level, record.achieve);
-            
-            processedSongs.push({
-                title: record.title,
-                achieve: record.achieve,
-                rating: rating,
-                isNew: isSongNew,
-                image: songInfo.image
-            });
-        } else {
-            // DB에 없는 곡은 0점 처리하되, 이름과 달성률을 유지해서 보관
-            unregisteredSongs.push({
-                title: record.title,
-                achieve: record.achieve,
-                rating: 0,
-                image: 'https://via.placeholder.com/120/222222/ffffff?text=No+Image'
-            });
+    try {
+        const urlParams = new URLSearchParams(window.location.search);
+        let rawData = urlParams.get('data');
+      
+        if (!rawData) {
+            showError("주소창에서 'data' 파라미터를 읽지 못했습니다. 북마크릿 주소 연동을 확인해 주세요.");
+            return;
         }
-    });
-  
-    // 정렬 및 필터링
-    processedSongs.sort((a, b) => b.rating - a.rating);
-    const newSongs = processedSongs.filter(s => s.isNew).slice(0, 15);
-    const oldSongs = processedSongs.filter(s => !s.isNew).slice(0, 35);
-  
-    // 화면에 각각 출력
-    renderSongs(newSongs, 'new-songs-list');
-    renderSongs(oldSongs, 'old-songs-list');
-    renderSongs(unregisteredSongs, 'unregistered-songs-list');
+
+        let userRecords = [];
+        try {
+            // URL 디코딩 후 JSON 파싱 시도
+            userRecords = JSON.parse(decodeURIComponent(rawData));
+        } catch (jsonErr) {
+            showError("1차 데이터 파싱 에러 발생. 깨진 문자열 복구를 시도합니다: " + jsonErr.message);
+            
+            // 특수문자 깨짐 강제 구제 로직
+            try {
+                let fixedData = decodeURIComponent(rawData.replace(/\+/g, '%20'));
+                userRecords = JSON.parse(fixedData);
+                showError("💡 데이터 복구에 성공했습니다! 정상적으로 곡을 불러옵니다.");
+            } catch (retryErr) {
+                showError("❌ 치명적인 데이터 깨짐 에러. 파싱 불가: " + retryErr.message);
+                showError("현재 전달된 데이터 원문 맛보기: " + rawData.substring(0, 100));
+                return;
+            }
+        }
+        
+        document.getElementById('debug-count').innerText = userRecords.length;
+        
+        let processedSongs = [];
+        let unregisteredSongs = []; 
+      
+        userRecords.forEach(record => {
+            if (!record || !record.title) return;
+            
+            const songInfo = musicConstantDB[record.title];
+            if (songInfo) {
+                processedSongs.push({
+                    title: record.title,
+                    achieve: record.achieve,
+                    rating: Math.floor(songInfo.level * 22.4 * (Math.min(record.achieve, 100.5) / 100)),
+                    isNew: songInfo.isNew || false
+                });
+            } else {
+                unregisteredSongs.push({
+                    title: record.title,
+                    achieve: record.achieve,
+                    rating: 0
+                });
+            }
+        });
+      
+        processedSongs.sort((a, b) => b.rating - a.rating);
+        
+        renderSongs(processedSongs.filter(s => s.isNew).slice(0, 15), 'new-songs-list');
+        renderSongs(processedSongs.filter(s => !s.isNew).slice(0, 35), 'old-songs-list');
+        renderSongs(unregisteredSongs, 'unregistered-songs-list');
+
+    } catch (globalErr) {
+        showError("전체 시스템 에러 치명상: " + globalErr.message);
+    }
 }
   
 function renderSongs(songs, targetId) {
@@ -124,8 +125,7 @@ function renderSongs(songs, targetId) {
         const card = document.createElement('div');
         card.className = 'song-card';
         card.innerHTML = `
-            <img src="${song.image}" alt="${song.title}">
-            <div class="title" style="font-size:12px; font-weight:bold; color:#00ffcc; margin-bottom:5px;">${song.title}</div>
+            <div class="title">${song.title}</div>
             <div class="achieve">${song.achieve.toFixed(4)}%</div>
             <div class="rating">Rating: <strong>${song.rating > 0 ? song.rating : 'DB미등록'}</strong></div>
         `;
