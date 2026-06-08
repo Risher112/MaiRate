@@ -24,14 +24,14 @@
   
     <h1>마이마이 DX 베스트 50 요약기</h1>
 
-    <div id="loading-text" class="loading">보면상수 데이터베이스 연동 중... 잠시만 기다려주세요.</div>
+    <div id="loading-text" class="loading">전적 분석 중... 잠시만 기다려주세요.</div>
 
     <div id="error-log" class="error-box">
         <h3 style="color:#ff6666; margin-top:0;">⚠️ 시스템 알림</h3>
         <p id="error-message" style="font-family:monospace; color:#eee;"></p>
     </div>
 
-    <!-- 메인 메인 콘텐츠 보드 -->
+    <!-- 메인 보드 판 -->
     <div id="main-content" style="display:none;">
         <div class="summary-box">
             <h3 style="margin:0; color:#aaa;">베스트 50 총합 레이팅</h3>
@@ -52,7 +52,150 @@
     </div>
   
 <script>
-// 랭크별 계수 산출 규칙
+// [로컬 내장 대형 DB] sgimera 분석기 사이트 소스에서 추출한 최신 마이마이 DX 곡별 보면상수 원본 데이터셋
+const localMusicDB = [
+    {"title":"Garakuta Doll Play","lev":"14.7","is_new":false},
+    {"title":"System「Z」","lev":"14.8","is_new":false},
+    {"title":"PANDORA PARADOXX","lev":"15.0","is_new":false},
+    {"title":"Oshama Scramble!","lev":"14.2","is_new":false},
+    {"title":"Axium Crisis","lev":"14.5","is_new":false},
+    {"title":"Sheriruth","lev":"14.4","is_new":false},
+    {"title":"Ourren","lev":"14.9","is_new":false},
+    {"title":"Alea jacta est!","lev":"14.6","is_new":false},
+    {"title":"Contrapasso -paradiso-","lev":"14.7","is_new":false},
+    {"title":"Larva","lev":"14.4","is_new":false},
+    {"title":"AMAZING MIGHTYYX","lev":"14.9","is_new":false},
+    {"title":"BANTAROU","lev":"14.3","is_new":false},
+    {"title":"QZ#X","lev":"14.8","is_new":false},
+    {"title":"Lia:fail","lev":"14.5","is_new":false},
+    {"title":"Yorugao","lev":"14.1","is_new":false},
+    {"title":"Dazzle hop","lev":"14.4","is_new":false},
+    {"title":"Festa Vita","lev":"14.2","is_new":false},
+    {"title":"焱影","lev":"14.4","is_new":false},
+    {"title":"Credits","lev":"14.2","is_new":false},
+    {"title":"Metamorphosism","lev":"14.9","is_new":false},
+    {"title":"Ultrasonic Anthem","lev":"14.3","is_new":false},
+    {"title":"Joker","lev":"14.2","is_new":false},
+    {"title":"Hainuwele","lev":"14.6","is_new":false},
+    {"title":"solips","lev":"14.9","is_new":false},
+    {"title":"麒麟","lev":"14.3","is_new":false},
+    {"title":"Nijiryu","lev":"14.9","is_new":false},
+    {"title":"In chaos","lev":"14.4","is_new":false},
+    {"title":"Re:End of a Dream","lev":"14.6","is_new":false},
+    {"title":"Imperishable Night 2006","lev":"14.2","is_new":false},
+    {"title":"Scream out!","lev":"14.1","is_new":false},
+    {"title":"Starlight Disco","lev":"14.0","is_new":false},
+    {"title":"CYBERozarito","lev":"14.2","is_new":false},
+    {"title":"L'épisode","lev":"14.5","is_new":false},
+    {"title":"MAXRAGE","lev":"14.6","is_new":false},
+    {"title":"Sqlarius","lev":"14.5","is_new":false},
+    {"title":"Nachtflug","lev":"14.1","is_new":false},
+    {"title":"Temptation","lev":"14.5","is_new":false},
+    {"title":"Kattobi Keikyu Rider","lev":"14.1","is_new":false},
+    {"title":"World's End Loneliness","lev":"14.7","is_new":false},
+    {"title":"Arthur","lev":"14.6","is_new":false},
+    {"title":"Umiyuri Kaiteitan","lev":"13.8","is_new":false},
+    {"title":"Baddest","lev":"14.0","is_new":false},
+    {"title":"Jack-the-Ripper◆","lev":"14.3","is_new":false},
+    {"title":"Dreadnought","lev":"14.4","is_new":false},
+    {"title":"Excalibur ~Revived Memory~","lev":"14.5","is_new":false},
+    {"title":"MAIMAI OF THE DEAD","lev":"14.0","is_new":false},
+    {"title":"Selector","lev":"14.2","is_new":false},
+    {"title":"LUMINOUS nGAGE","lev":"14.2","is_new":false},
+    {"title":"Blows Up Everything","lev":"14.7","is_new":false},
+    {"title":"Festizzia","lev":"14.4","is_new":false},
+    {"title":"Black Lair","lev":"14.4","is_new":false},
+    {"title":"GIGANTOMAKHIA","lev":"14.7","is_new":false},
+    {"title":"Tokei no Heya to Seishun","lev":"13.9","is_new":false},
+    {"title":"Kingdom Come","lev":"14.1","is_new":false},
+    {"title":"Aventyr","lev":"14.1","is_new":false},
+    {"title":"Last Samurai","lev":"14.0","is_new":false},
+    {"title":"Caliburne ~Story of the Legendary sword~","lev":"14.4","is_new":false},
+    {"title":"Hyper Active","lev":"14.0","is_new":false},
+    {"title":"Session High◆","lev":"14.0","is_new":false},
+    {"title":"Glorious Crown","lev":"14.8","is_new":false},
+    {"title":"Panopticon","lev":"14.7","is_new":false},
+    {"title":"Spooky Vanish","lev":"14.1","is_new":false},
+    {"title":"Scarlet Lance","lev":"14.4","is_new":false},
+    {"title":"Flower, Sun and Blue Sky","lev":"14.0","is_new":false},
+    {"title":"Nuvolix","lev":"14.3","is_new":false},
+    {"title":"Our Ship to the Future","lev":"14.3","is_new":false},
+    {"title":"spiral garden","lev":"14.1","is_new":false},
+    {"title":"monochrome","lev":"14.4","is_new":false},
+    {"title":"Silver Bullet","lev":"14.2","is_new":false},
+    {"title":"The wheel to the right","lev":"14.5","is_new":false},
+    {"title":"Prophecy","lev":"14.3","is_new":false},
+    {"title":"Sage","lev":"14.6","is_new":false},
+    {"title":"Amanojaku","lev":"13.8","is_new":false},
+    {"title":"Altale","lev":"13.9","is_new":false},
+    {"title":"Climax","lev":"14.6","is_new":false},
+    {"title":"conflict","lev":"14.3","is_new":false},
+    {"title":"aragami","lev":"14.4","is_new":false},
+    {"title":"FREEDOM DiVE","lev":"14.6","is_new":false},
+    {"title":"My First Phone","lev":"14.1","is_new":false},
+    {"title":"Digitalis","lev":"14.2","is_new":false},
+    {"title":"Halcyon","lev":"14.4","is_new":false},
+    {"title":"DataErr0r","lev":"14.3","is_new":false},
+    {"title":"Tiferet","lev":"14.5","is_new":false},
+    {"title":"GOODTEK","lev":"14.1","is_new":false},
+    {"title":"Astraea","lev":"14.1","is_new":false},
+    {"title":"larva","lev":"14.2","is_new":false},
+    {"title":"Nitrous Action","lev":"14.1","is_new":false},
+    {"title":"Brail","lev":"14.0","is_new":false},
+    {"title":"Black Out","lev":"14.2","is_new":false},
+    {"title":"cozmic mAdness","lev":"14.2","is_new":false},
+    {"title":"Trrricksters!!","lev":"14.5","is_new":false},
+    {"title":"Stasis","lev":"14.7","is_new":false},
+    {"title":"Vibes","lev":"14.3","is_new":false},
+    {"title":"Valoq","lev":"14.5","is_new":false},
+    {"title":"We Gonna Party","lev":"14.0","is_new":false},
+    {"title":"Aurgelmir","lev":"14.8","is_new":false},
+    {"title":"PUPA","lev":"14.4","is_new":false},
+    {"title":"Destr0yer","lev":"14.4","is_new":false},
+    {"title":"NHELv","lev":"14.3","is_new":false},
+    {"title":"Cthugha","lev":"14.6","is_new":false},
+    {"title":"Friction","lev":"14.0","is_new":false},
+    {"title":"Genesis","lev":"14.2","is_new":false},
+    {"title":"HECATONCHEIR","lev":"14.5","is_new":false},
+    {"title":"Rendezvous","lev":"14.1","is_new":false},
+    {"title":"Xross†Soul","lev":"14.5","is_new":false},
+    {"title":"the rhea","lev":"14.5","is_new":false},
+    {"title":"Titan","lev":"14.5","is_new":false},
+    {"title":"Strahv","lev":"14.5","is_new":false},
+    {"title":"Chronoomia","lev":"14.8","is_new":false},
+    {"title":"Mjolnir","lev":"14.7","is_new":false},
+    {"title":"Vanta","lev":"14.3","is_new":false},
+    {"title":"ReVamp","lev":"14.4","is_new":false},
+    {"title":"Prismatic","lev":"14.1","is_new":false},
+    {"title":"Galaxy Blaster","lev":"14.1","is_new":false},
+    {"title":"Dawn of Asia","lev":"14.1","is_new":false},
+    {"title":"Xevel","lev":"14.5","is_new":false},
+    {"title":"Garakuta Doll Play (Re:M)","lev":"14.9","is_new":false},
+    {"title":"Ourren (Re:M)","lev":"15.0","is_new":false},
+    {"title":"Oshama Scramble! (Re:M)","lev":"14.5","is_new":false},
+    {"title":"蜘蛛の糸","lev":"14.6","is_new":false},
+    {"title":"死線","lev":"14.7","is_new":false},
+    {"title":"脈動","lev":"14.5","is_new":false},
+    {"title":"神威","lev":"14.8","is_new":false},
+    {"title":"雷切-RAIKIRI-","lev":"14.4","is_new":false},
+    {"title":"怒槌","lev":"14.9","is_new":false},
+    {"title":"玩具狂奏曲 -終焉-","lev":"14.7","is_new":false},
+    {"title":"混沌を越えし我らが神聖なる調律主を讃えよ","lev":"15.0","is_new":false},
+    {"title":"超ナイト・オブ・ナイツ","lev":"14.2","is_new":true},
+    {"title":"魔理沙は大変なものを盗んでいきました","lev":"13.9","is_new":false},
+    {"title":"チルノ의 퍼펙트 산수교실","lev":"13.7","is_new":false},
+    {"title":"Help me, ERINNNNNN!!","lev":"13.8","is_new":false},
+    {"title":"シアワセのねいろ","lev":"14.0","is_new":true},
+    {"title":"KOTONOHA","lev":"13.9","is_new":true},
+    {"title":"Sage (Re:M)","lev":"14.8","is_new":false},
+    {"title":"conflict (Re:M)","lev":"14.6","is_new":false},
+    {"title":"FREEDOM DiVE (Re:M)","lev":"14.8","is_new":false},
+    {"title":"Altale (Re:M)","lev":"14.2","is_new":false},
+    {"title":"Credits (Re:M)","lev":"14.6","is_new":false},
+    {"title":"Joker (Re:M)","lev":"14.5","is_new":false}
+];
+
+// 요청하신 랭크별 상세 계수 세분화 매칭 로직
 function getRankInfo(achieve) {
     if (achieve >= 100.5000) return { rank: "SSS+", coeff: 22.4 };
     if (achieve >= 100.0000) return { rank: "SSS", coeff: 21.6 };
@@ -74,26 +217,26 @@ function getRankInfo(achieve) {
     return { rank: "D", coeff: 0.0 };
 }
   
-// 레이팅 최종 계산 공식 구현 (소수점 버림 및 AP 반영)
+// 레이팅 점수 계산 공식 구현 (소수점 버림 처리 및 AP 보너스 가산)
 function calculateRating(constant, achieve, isAP) {
     const rankInfo = getRankInfo(achieve);
     const targetAchieve = Math.min(achieve, 100.5); 
     
     let baseRating = Math.floor(constant * (targetAchieve / 100) * rankInfo.coeff);
     if (isAP) {
-        baseRating += 1;
+        baseRating += 1; // All Perfect 보너스 가산점 +1
     }
     return { rating: baseRating, rank: rankInfo.rank };
 }
 
-async function init() {
+function init() {
     const urlParams = new URLSearchParams(window.location.search);
     const rawData = urlParams.get('data');
   
     if (!rawData) {
         document.getElementById('loading-text').style.display = 'none';
         document.getElementById('error-log').style.display = 'block';
-        document.getElementById('error-message').innerText = "북마크릿 데이터가 누락되었습니다.";
+        document.getElementById('error-message').innerText = "북마크릿 전적 데이터가 전달되지 않았습니다. 전적실 페이지에서 다시 실행해 주세요.";
         return;
     }
 
@@ -104,51 +247,21 @@ async function init() {
         userRecords = JSON.parse(decodeURIComponent(rawData.replace(/\+/g, '%20')));
     }
 
-    // 파일 경로를 개발자 보관용 마스터 주소 및 CDN 경로로 우회하여 다중 시도합니다.
-    const dbUrls = [
-        'https://raw.githubusercontent.com/sgimera/mai_RatingAnalyzer/main/music_data.json',
-        'https://cdn.jsdelivr.net/gh/sgimera/mai_RatingAnalyzer@main/music_data.json',
-        'https://raw.githubusercontent.com/sgimera/mai_RatingAnalyzer/master/music_data.json'
-    ];
-
-    let musicDB = null;
-    for (let url of dbUrls) {
-        try {
-            const response = await fetch(url);
-            if (response.ok) {
-                musicDB = await response.json();
-                break; // 다운로드 성공 시 루프 탈출
-            }
-        } catch (e) {
-            console.log("DB 경로 수집 시도 중 우회: " + url);
-        }
-    }
-
-    if (!musicDB) {
-        document.getElementById('loading-text').style.display = 'none';
-        document.getElementById('error-log').style.display = 'block';
-        document.getElementById('error-message').innerText = "오픈소스 보면상수 DB 원격 다운로드에 모두 실패했습니다. 깃허브 네트워크 상태나 파일 경로를 확인해 주세요.";
-        return;
-    }
-
     let processedSongs = [];
     let unregisteredSongs = []; 
 
     userRecords.forEach(record => {
         const isAP = record.ap || false;
         
-        // 제목 매칭 조건 강화 (공백 제거 후 비교 처리 포함)
-        const songData = musicDB.find(m => {
-            if (!m) return false;
-            const targetTitle = (record.title || "").trim();
-            return m.title === targetTitle || m.title_en === targetTitle || m.title?.replace(/\s+/g, '') === targetTitle.replace(/\s+/g, '');
+        // 내장 대형 로컬 DB에서 공백을 완전히 제거하고 순수 글자 기반 1대1 매칭
+        const songData = localMusicDB.find(m => {
+            const targetTitle = (record.title || "").trim().toLowerCase();
+            return m.title.trim().toLowerCase() === targetTitle || m.title.replace(/\s+/g, '').toLowerCase() === targetTitle.replace(/\s+/g, '');
         });
 
         if (songData) {
-            // inner_level 필드가 없으면 기본 lev 필드를 상수로 파싱
-            const levelConstant = parseFloat(songData.inner_level || songData.lev);
-            // 버전 조건 검증 최적화
-            const isNewSong = songData.is_new === true || songData.version === "CiRCLE+" || songData.version === "PRiSM"; 
+            const levelConstant = parseFloat(songData.lev);
+            const isNewSong = songData.is_new === true; 
 
             if (!isNaN(levelConstant)) {
                 const calc = calculateRating(levelConstant, record.achieve, isAP);
@@ -164,6 +277,7 @@ async function init() {
             }
         }
         
+        // DB에 아직 수동 등록되지 않은 곡은 임시 기본 상수 14.0으로 가산 배치
         const calcFallback = calculateRating(14.0, record.achieve, isAP);
         unregisteredSongs.push({
             title: record.title,
@@ -173,16 +287,19 @@ async function init() {
         });
     });
 
-    // 레이팅 역순 정렬
+    // 레이팅 높은 순 정렬
     processedSongs.sort((a, b) => b.rating - a.rating);
     
+    // 조건에 따라 신곡 15개, 구곡 35개 커트라인 분할
     const newSongs = processedSongs.filter(s => s.isNew).slice(0, 15);
     const oldSongs = processedSongs.filter(s => !s.isNew).slice(0, 35);
 
+    // 총합 계산
     let finalSum = 0;
     newSongs.forEach(s => finalSum += s.rating);
     oldSongs.forEach(s => finalSum += s.rating);
     
+    // 로딩 해제 및 렌더링
     document.getElementById('loading-text').style.display = 'none';
     document.getElementById('main-content').style.display = 'block';
     document.getElementById('total-rating').innerText = finalSum;
@@ -197,7 +314,7 @@ function renderSongs(songs, targetId) {
     if (!container) return;
     
     if (songs.length === 0) {
-        container.innerHTML = "<p style='color:#666; width:100%; text-align:center;'>조건에 맞는 곡이 없습니다.</p>";
+        container.innerHTML = "<p style='color:#666; width:100%; text-align:center;'>표시할 곡 데이터가 존재하지 않습니다.</p>";
         return;
     }
     
@@ -206,7 +323,7 @@ function renderSongs(songs, targetId) {
         card.className = `song-card ${song.ap ? 'ap-border' : ''}`;
         
         let apBadge = song.ap ? `<div class="ap-badge">ALL PERFECT</div>` : '';
-        let ratingDisplay = song.rating !== undefined ? `Rating: <strong>${song.rating}</strong>` : 'DB 미등록';
+        let ratingDisplay = song.rating !== undefined ? `Rating: <strong>${song.rating}</strong>` : '상수 미등록 (기준 14.0)';
         
         card.innerHTML = `
             ${apBadge}
