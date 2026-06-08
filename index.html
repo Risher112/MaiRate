@@ -3,155 +3,132 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GitHub 데이터 분석 리포트</title>
-    <!-- 따로 설치 없이 웹에서 차트 라이브러리를 바로 불러옵니다 -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <title>마이마이 DX 일본판 베스트 50 레이팅 분석기</title>
     <style>
-        body { 
-            background-color: #121212; 
-            color: #ffffff; 
-            font-family: 'Arial', sans-serif; 
-            padding: 20px; 
-            max-width: 1000px;
-            margin: 0 auto;
-        }
+        body { background-color: #121212; color: #ffffff; font-family: 'Arial', sans-serif; padding: 20px; }
         h1, h2 { text-align: center; color: #00ffcc; }
-        .info-container {
-            background-color: #1e1e1e;
-            padding: 20px;
-            border-radius: 10px;
-            margin-bottom: 30px;
-            border: 1px solid #333;
-        }
-        .chart-box {
-            background-color: #1e1e1e;
-            padding: 20px;
-            border-radius: 10px;
-            margin-bottom: 30px;
-            border: 1px solid #333;
-            max-height: 450px;
-            display: flex;
-            justify-content: center;
-        }
-        .grid-container { 
-            display: grid; 
-            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); 
-            gap: 15px; 
-            margin-bottom: 40px; 
-        }
-        .repo-card { 
-            background-color: #1e1e1e; 
-            border: 2px solid #333; 
-            border-radius: 10px; 
-            padding: 15px; 
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3); 
-        }
-        .title { font-size: 16px; font-weight: bold; color: #00ffcc; margin-bottom: 5px; }
-        .stars { color: #ffcc00; font-weight: bold; font-size: 14px; }
-        .lang { color: #aaaaaa; font-size: 13px; margin-top: 5px; }
+        .grid-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 15px; margin-bottom: 40px; }
+        .song-card { background-color: #1e1e1e; border: 2px solid #333; border-radius: 10px; padding: 10px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        .song-card img { width: 100%; max-width: 120px; border-radius: 5px; margin-bottom: 8px; }
+        .title { font-size: 14px; font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 5px; }
+        .achieve { color: #ffcc00; font-weight: bold; font-size: 16px; }
+        .rating { color: #00ffcc; font-size: 13px; margin-top: 5px; }
+        .warning-text { text-align: center; color: #aaaaaa; font-style: italic; }
     </style>
 </head>
 <body>
-
-    <h1>📊 GitHub 리포지토리 분석 결과</h1>
+  
+    <h1>마이마이 DX 베스트 50 요약기</h1>
     
-    <!-- 1. 기본 유저 정보 요약 섹션 -->
-    <div class="info-container">
-        <h2>사용자 요약</h2>
-        <p>📂 <strong>총 리포지토리 수:</strong> <span id="total-repos">0</span>개</p>
-        <p>⭐️ <strong>총 획득 스타(Stars) 수:</strong> <span id="total-stars">0</span>개</p>
-    </div>
+    <h2>신곡 상위 15곡 (New Songs Best 15)</h2>
+    <div id="new-songs-list" class="grid-container"></div>
+  
+    <h2>구곡 상위 35곡 (Old Songs Best 35)</h2>
+    <div id="old-songs-list" class="grid-container"></div>
 
-    <!-- 2. 시각적인 차트가 그려질 섹션 -->
-    <h2>🎨 개발 언어 사용 비중 (Language Distribution)</h2>
-    <div class="chart-box">
-        <canvas id="languageChart"></canvas>
-    </div>
-
-    <!-- 3. 상세 리포지토리 목록 섹션 -->
-    <h2>📁 리포지토리 상세 목록 (Repositories)</h2>
-    <div id="repo-list" class="grid-container"></div>
-
+    <!-- DB에 없어서 분류되지 못한 곡들을 강제로 보여주는 예외 섹션 -->
+    <h2>⚠️ DB 미등록 곡 목록 (분석 보류군)</h2>
+    <p class="warning-text">아래에 곡이 뜬다면 musicConstantDB의 곡 제목(일본어/오타)이 마이마이넷과 일치하지 않는 상태입니다.</p>
+    <div id="unregistered-songs-list" class="grid-container"></div>
+  
 <script>
-// 위에서 제공된 JSON 데이터를 JavaScript 변수에 그대로 담았습니다.
-const githubData = {
-    "total_repositories": 12,
-    "total_stars": 45,
-    "language_distribution": {
-        "TypeScript": 45.2,
-        "Java": 25.1,
-        "JavaScript": 15.3,
-        "Python": 9.4,
-        "HTML/CSS": 5.0
-    },
-    "repositories": [
-        { "name": "project-alpha", "stars": 18, "language": "TypeScript" },
-        { "name": "backend-api", "stars": 12, "language": "Java" },
-        { "name": "frontend-dashboard", "stars": 8, "language": "TypeScript" },
-        { "name": "data-analysis-tool", "stars": 5, "language": "Python" },
-        { "name": "portfolio-site", "stars": 2, "language": "HTML/CSS" }
-    ]
+// 1. 보면 상수 데이터베이스
+const musicConstantDB = {
+    "超ナイト・オブ・ナイツ": { level: 11.0, isNew: true, image: "https://maimai.sega.jp/storage/jacket/010101.png" },
+    "Arrow": { level: 12.0, isNew: true, image: "https://maimai.sega.jp/storage/jacket/020202.png" }
 };
 
+// 2. 판정계수 계산
+function getRatingCoefficient(achieve) {
+    if (achieve >= 100.5000) return 22.4;
+    if (achieve >= 100.0000) return 21.6;
+    if (achieve >= 99.5000)  return 21.1;
+    if (achieve >= 99.0000)  return 20.8;
+    if (achieve >= 98.0000)  return 20.3;
+    if (achieve >= 97.0000)  return 20.0;
+    return 16.8;
+}
+  
+// 3. 레이팅 계산
+function calculateSingleRating(constant, achieve) {
+    const coeff = getRatingCoefficient(achieve);
+    const targetAchieve = Math.min(achieve, 100.5);
+    return Math.floor(constant * coeff * (targetAchieve / 100));
+}
+  
+// 4. 데이터 처리 데이터 메인 로직
 function init() {
-    // 1. 텍스트 정보 매핑
-    document.getElementById('total-repos').innerText = githubData.total_repositories;
-    document.getElementById('total-stars').innerText = githubData.total_stars;
-
-    // 2. 리포지토리 카드 목록 그리기
-    const repoListContainer = document.getElementById('repo-list');
-    githubData.repositories.forEach(repo => {
-        const card = document.createElement('div');
-        card.className = 'repo-card';
-        card.innerHTML = `
-            <div class="title">${repo.name}</div>
-            <div class="stars">⭐️ Stars: ${repo.stars}</div>
-            <div class="lang">🛠 주 언어: ${repo.language}</div>
-        `;
-        repoListContainer.appendChild(card);
-    });
-
-    // 3. Chart.js를 이용한 파이(Pie) 차트 그리기
-    const ctx = document.getElementById('languageChart').getContext('2d');
+    const urlParams = new URLSearchParams(window.location.search);
+    const rawData = urlParams.get('data');
+  
+    if (!rawData) {
+        document.body.innerHTML += "<p style='text-align:center; color:#ff4444;'>북마크릿을 통해 데이터를 전송받지 못했습니다.</p>";
+        return;
+    }
+  
+    const userRecords = JSON.parse(decodeURIComponent(rawData));
     
-    // JSON 데이터에서 차트에 쓸 라벨(언어이름)과 데이터(수치) 분리 추출
-    const languages = Object.keys(githubData.language_distribution);
-    const percentages = Object.values(githubData.language_distribution);
-
-    new Chart(ctx, {
-        type: 'pie', // 차트 형태 (pie: 파이 차트, bar: 막대 차트 등)
-        data: {
-            labels: languages,
-            datasets: [{
-                data: percentages,
-                backgroundColor: [
-                    '#3178c6', // TypeScript (파랑)
-                    '#b07219', // Java (갈색)
-                    '#f1e05a', // JavaScript (노랑)
-                    '#3572A5', // Python (연파랑)
-                    '#e34c26'  // HTML/CSS (주황)
-                ],
-                borderWidth: 1,
-                borderColor: '#1e1e1e'
-            }]
-        },
-        options: {
-            responsive: true,
-            plugins: {
-                legend: {
-                    position: 'bottom',
-                    labels: {
-                        color: '#ffffff' // 범례 글자 색상 흰색으로 설정
-                    }
-                }
-            }
+    let processedSongs = [];
+    let unregisteredSongs = []; // DB에 없는 곡들을 모을 배열
+  
+    userRecords.forEach(record => {
+        // 대소문자나 공백 오류 방지를 위해 유연하게 매칭 시도
+        const songInfo = musicConstantDB[record.title];
+        
+        if (songInfo) {
+            // 대소문자 에러 방지를 위해 속성을 안전하게 가져옴 (isNew 혹은 isnew 모두 대응)
+            const isSongNew = songInfo.isNew || songInfo.isnew || false;
+            const rating = calculateSingleRating(songInfo.level, record.achieve);
+            
+            processedSongs.push({
+                title: record.title,
+                achieve: record.achieve,
+                rating: rating,
+                isNew: isSongNew,
+                image: songInfo.image
+            });
+        } else {
+            // DB에 없는 곡은 임시 레이팅(0점) 처리하여 따로 보관
+            unregisteredSongs.push({
+                title: record.title,
+                achieve: record.achieve,
+                rating: 0,
+                image: 'https://via.placeholder.com/120?text=No+DB'
+            });
         }
     });
+  
+    // 정렬 및 필터링
+    processedSongs.sort((a, b) => b.rating - a.rating);
+    const newSongs = processedSongs.filter(s => s.isNew).slice(0, 15);
+    const oldSongs = processedSongs.filter(s => !s.isNew).slice(0, 35);
+  
+    // 화면에 각각 출력
+    renderSongs(newSongs, 'new-songs-list');
+    renderSongs(oldSongs, 'old-songs-list');
+    renderSongs(unregisteredSongs, 'unregistered-songs-list');
 }
-
-// 웹페이지 로드가 완료되면 분석 실행
+  
+function renderSongs(songs, targetId) {
+    const container = document.getElementById(targetId);
+    if (songs.length === 0) {
+        container.innerHTML = "<p style='color:#666; width:100%; text-align:center;'>표시할 곡이 없습니다.</p>";
+        return;
+    }
+    songs.forEach(song => {
+        const card = document.createElement('div');
+        card.className = 'song-card';
+        card.innerHTML = `
+            <img src="${song.image}" alt="${song.title}" onerror="this.src='https://via.placeholder.com/120?text=No+Image'">
+            <div class="title" title="${song.title}">${song.title}</div>
+            <div class="achieve">${song.achieve.toFixed(4)}%</div>
+            <div class="rating">Rating: <strong>${song.rating > 0 ? song.rating : '계산불가'}</strong></div>
+        `;
+        container.appendChild(card);
+    });
+}
+  
 window.onload = init;
 </script>
-
 </body>
 </html>
